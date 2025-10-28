@@ -123,6 +123,7 @@ def _authorize(
                     "roles": sorted(principal.roles),
                 },
             )
+            principal.roles |= allowed_role_set
         else:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
