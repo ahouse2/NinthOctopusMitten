@@ -255,11 +255,16 @@ class RetrievalService:
                 graph_edges_page = []
                 graph_nodes_page = []
 
-            relation_statements_page = [
-                statement
-                for statement, doc_id in relation_statements
-                if doc_id is None or doc_id in doc_ids_page
-            ]
+            if doc_ids_page:
+                relation_statements_page = [
+                    statement
+                    for statement, doc_id in relation_statements
+                    if doc_id is None or doc_id in doc_ids_page
+                ]
+            else:
+                relation_statements_page = [
+                    statement for statement, _ in relation_statements
+                ]
 
             trace_page = Trace(
                 vector=vector_trace_page,
