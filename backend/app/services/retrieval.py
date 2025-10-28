@@ -181,27 +181,6 @@ class RetrievalService:
                 "filter_entity": bool(entity_filter),
             }
 
-            if total_items == 0:
-                has_evidence = False
-                metric_attrs["has_evidence"] = has_evidence
-                duration_ms = (perf_counter() - start_time) * 1000.0
-                span.set_attribute("retrieval.total_items", total_items)
-                span.set_attribute("retrieval.has_evidence", has_evidence)
-                span.set_attribute("retrieval.duration_ms", duration_ms)
-                _retrieval_queries_counter.add(1, attributes=metric_attrs)
-                _retrieval_query_duration.record(duration_ms, attributes=metric_attrs)
-                _retrieval_results_histogram.record(total_items, attributes=metric_attrs)
-                empty_trace = Trace(vector=[], graph={"nodes": [], "edges": []}, forensics=[])
-                meta = QueryMeta(page=page, page_size=page_size, total_items=0, has_next=False)
-                answer = "No supporting evidence found for the supplied query."
-                return QueryResult(
-                    answer=answer,
-                    citations=[],
-                    trace=empty_trace,
-                    meta=meta,
-                    has_evidence=False,
-                )
-
             start = (page - 1) * page_size
             end = min(start + page_size, total_items)
             has_next = end < total_items
@@ -218,7 +197,7 @@ class RetrievalService:
                 trace_span.set_attribute("retrieval.trace.edges", len(trace_full.graph.get("edges", [])))
             citations_full = self._build_citations(filtered_results)
 
-            page_results = filtered_results[start:end]
+            page_results = filtered_results[start:end] if end > start else []
             citations_page = citations_full[start:end] if end > start else []
             doc_ids_page: Set[str] = set()
             for point in page_results:
@@ -240,7 +219,7 @@ class RetrievalService:
                         or edge.get("source") in doc_ids_page
                         or edge.get("target") in doc_ids_page
                     )
-                [
+                ]
                 graph_node_ids = {
                     edge.get("source") for edge in graph_edges_page
                 } | {
@@ -251,6 +230,9 @@ class RetrievalService:
                     for node in trace_full.graph.get("nodes", [])
                     if node.get("id") in graph_node_ids
                 ]
+            elif total_items == 0:
+                graph_edges_page = trace_full.graph.get("edges", [])
+                graph_nodes_page = trace_full.graph.get("nodes", [])
             else:
                 graph_edges_page = []
                 graph_nodes_page = []
@@ -273,12 +255,12 @@ class RetrievalService:
             )
 
             answer = self._compose_answer(question, page_results, relation_statements_page)
-            if start >= total_items:
+            if total_items > 0 and start >= total_items:
                 answer = (
                     f"{answer} No additional supporting evidence available for page {page}; "
                     "adjust pagination or filters to view existing evidence."
                 )
-            
+
             meta = QueryMeta(
                 page=page,
                 page_size=page_size,
@@ -286,7 +268,14 @@ class RetrievalService:
                 has_next=has_next,
             )
 
-            has_evidence = True
+            has_evidence = bool(
+                page_results
+                or relation_statements_page
+                or vector_trace_page
+                or graph_edges_page
+                or graph_nodes_page
+                or forensics_trace_page
+            )
             metric_attrs["has_evidence"] = has_evidence
             duration_ms = (perf_counter() - start_time) * 1000.0
             span.set_attribute("retrieval.total_items", total_items)
@@ -301,7 +290,7 @@ class RetrievalService:
                 citations=citations_page,
                 trace=trace_page,
                 meta=meta,
-                has_evidence=True,
+                has_evidence=has_evidence,
             )
 
     def _build_citations(self, results: List[qmodels.ScoredPoint]) -> List[Citation]:
