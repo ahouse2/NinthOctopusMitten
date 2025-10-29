@@ -41,15 +41,18 @@ function App(): JSX.Element {
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent): void => {
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tagName = target.tagName;
+      const target = event.target;
+      const elementTarget = target instanceof Element ? target : null;
+      if (elementTarget) {
+        const tagName = elementTarget.tagName;
         if (
-          target.isContentEditable ||
+          elementTarget.isContentEditable ||
           tagName === 'INPUT' ||
           tagName === 'TEXTAREA' ||
           tagName === 'SELECT' ||
-          target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+          elementTarget.closest(
+            'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+          )
         ) {
           return;
         }
