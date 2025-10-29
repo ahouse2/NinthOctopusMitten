@@ -99,6 +99,25 @@ class ScenarioEngine:
     ) -> Dict[str, object]:
         scenario = self.get(options.scenario_id)
         participants = self._resolve_participants(scenario, options.participants)
+        missing_speakers = sorted(
+            {
+                beat.speaker
+                for beat in scenario.beats
+                if beat.speaker not in participants
+            }
+        )
+        if missing_speakers:
+            raise WorkflowAbort(
+                WorkflowError(
+                    component=WorkflowComponent.SCENARIO,
+                    code="SCENARIO_SPEAKER_UNAVAILABLE",
+                    message=(
+                        "Scenario configuration excluded participants referenced by "
+                        f"beats: {', '.join(missing_speakers)}"
+                    ),
+                    context={"missing_speakers": missing_speakers},
+                )
+            )
         context = self._build_context(scenario, participants, options)
         run_id = str(uuid4())
         transcript: List[Dict[str, object]] = []
