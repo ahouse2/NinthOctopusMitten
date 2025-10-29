@@ -1138,7 +1138,7 @@ def build_connector(source_type: str, settings: Settings, registry: CredentialRe
         return S3SourceConnector(settings, registry, logger)
     if lowered in {"courtlistener", "court_listener"}:
         return CourtListenerSourceConnector(settings, registry, logger)
-    if lowered in {"websearch", "web_search", "web"}:
+    if lowered in {"websearch", "web_search"}:
         return WebSearchSourceConnector(settings, registry, logger)
     if lowered == "sharepoint":
         return SharePointSourceConnector(settings, registry, logger)
