@@ -189,6 +189,7 @@ class Settings(BaseSettings):
     )
 
     graphql_cors_allowed_origins: tuple[str, ...] = Field(default=())
+    graphql_cors_allow_credentials: bool = Field(default=False)
 
     qdrant_collection: str = Field(default="cocounsel_documents")
     qdrant_vector_size: int = Field(default=384)

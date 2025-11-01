@@ -169,28 +169,37 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
 
     allowed_origins = tuple(settings.graphql_cors_allowed_origins)
     allow_any_origin = "*" in allowed_origins
-    origin_is_allowed = bool(origin) and (
-        allow_any_origin or origin in allowed_origins
-    )
 
-    if origin_is_allowed:
-        allowed_origin = cast(str, origin)
-        response.headers["Access-Control-Allow-Origin"] = allowed_origin
-        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
-        vary_header = response.headers.get("Vary")
-        if vary_header:
-            vary_values = {value.strip() for value in vary_header.split(",") if value}
-            vary_values.add("Origin")
-            response.headers["Vary"] = ", ".join(sorted(vary_values))
-        else:
-            response.headers["Vary"] = "Origin"
-        response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
-        response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
-
-    if not origin and allow_any_origin:
+    if allow_any_origin:
         response.headers.setdefault("Access-Control-Allow-Origin", "*")
         response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
         response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
+        # When any origin is allowed we cannot enable credentialed requests.
+        if not settings.graphql_cors_allow_credentials:
+            return
+        # If credentialed requests are required, fall through and only grant access
+        # to explicit origins (excluding the wildcard entry).
+        allowed_origins = tuple(
+            origin_value
+            for origin_value in allowed_origins
+            if origin_value != "*"
+        )
+
+    if not origin or origin not in allowed_origins:
+        return
+
+    response.headers["Access-Control-Allow-Origin"] = cast(str, origin)
+    if settings.graphql_cors_allow_credentials:
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+    vary_header = response.headers.get("Vary")
+    if vary_header:
+        vary_values = {value.strip() for value in vary_header.split(",") if value}
+        vary_values.add("Origin")
+        response.headers["Vary"] = ", ".join(sorted(vary_values))
+    else:
+        response.headers["Vary"] = "Origin"
+    response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
+    response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
 
 
 @app.options("/graphql", include_in_schema=False)
