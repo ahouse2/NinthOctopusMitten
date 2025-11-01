@@ -29,6 +29,14 @@ function Resolve-InstallDirectory {
     }
 
     try {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+            try { Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue } catch { }
+        }
+        catch {
+            throw "Failed to load Windows Forms assemblies: $($_.Exception.Message)"
+        }
+
         $state = [hashtable]::Synchronized(@{
             DefaultPath = $normalizedDefault
             Result = $null
@@ -40,8 +48,6 @@ function Resolve-InstallDirectory {
             param($threadState)
 
             try {
-                Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
-                try { Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue } catch { }
                 [System.Windows.Forms.Application]::EnableVisualStyles()
 
                 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
