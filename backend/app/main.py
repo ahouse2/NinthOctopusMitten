@@ -169,16 +169,20 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
 
     allowed_origins = tuple(settings.graphql_cors_allowed_origins)
     allow_any_origin = "*" in allowed_origins
+    allow_credentials = settings.graphql_cors_allow_credentials
 
     if allow_any_origin:
-        response.headers.setdefault("Access-Control-Allow-Origin", "*")
-        response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
-        response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
-        # When any origin is allowed we cannot enable credentialed requests.
-        if not settings.graphql_cors_allow_credentials:
+        # When any origin is allowed we cannot enable credentialed requests. In
+        # this mode the wildcard is safe to return immediately because no origin
+        # verification is required.
+        if not allow_credentials:
+            response.headers.setdefault("Access-Control-Allow-Origin", "*")
+            response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
+            response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
             return
-        # If credentialed requests are required, fall through and only grant access
-        # to explicit origins (excluding the wildcard entry).
+        # If credentialed requests are required, fall through and only grant
+        # access to explicit origins (excluding the wildcard entry). Defer
+        # writing any CORS headers until we verify the request origin.
         allowed_origins = tuple(
             origin_value
             for origin_value in allowed_origins
@@ -189,7 +193,7 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
         return
 
     response.headers["Access-Control-Allow-Origin"] = cast(str, origin)
-    if settings.graphql_cors_allow_credentials:
+    if allow_credentials:
         response.headers.setdefault("Access-Control-Allow-Credentials", "true")
     vary_header = response.headers.get("Vary")
     if vary_header:
