@@ -4,7 +4,7 @@ import base64
 import time
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from fastapi import (
     Depends,
@@ -132,6 +132,9 @@ from .security.dependencies import (
 from .security.mtls import MTLSMiddleware
 from .storage.agent_memory_store import ImprovementTaskRecord, PatchProposalRecord
 
+GRAPHQL_HTTP_ALLOWED_METHODS: Tuple[str, ...] = ("GET", "POST", "OPTIONS")
+
+
 settings = get_settings()
 setup_telemetry(settings)
 app = FastAPI(title=settings.app_name, version=settings.app_version)
@@ -156,29 +159,17 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
     allow_headers = request.headers.get(
         "access-control-request-headers", "authorization,content-type"
     )
-    requested_method = request.headers.get("access-control-request-method")
-    allow_methods_list = ["GET", "POST", "OPTIONS"]
-    if requested_method:
-        requested_method_upper = requested_method.upper()
-        if requested_method_upper not in allow_methods_list:
-            allow_methods_list.insert(0, requested_method_upper)
-    allow_methods = ", ".join(dict.fromkeys(allow_methods_list))
-
     response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
-    response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
+    response.headers.setdefault(
+        "Access-Control-Allow-Methods",
+        ", ".join(GRAPHQL_HTTP_ALLOWED_METHODS),
+    )
 
 
 @app.options("/graphql", include_in_schema=False)
 async def graphql_http_options(request: Request) -> Response:
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    requested_method = request.headers.get("access-control-request-method")
-    allow_methods_list = ["GET", "POST", "OPTIONS"]
-    if requested_method:
-        requested_method_upper = requested_method.upper()
-        if requested_method_upper not in allow_methods_list:
-            allow_methods_list.insert(0, requested_method_upper)
-    allow_methods = ", ".join(dict.fromkeys(allow_methods_list))
-    response.headers["Allow"] = allow_methods
+    response.headers["Allow"] = ", ".join(GRAPHQL_HTTP_ALLOWED_METHODS)
     _apply_graphql_cors_headers(request, response)
     return response
 
