@@ -188,6 +188,8 @@ class Settings(BaseSettings):
         }
     )
 
+    graphql_cors_allowed_origins: tuple[str, ...] = Field(default=())
+
     qdrant_collection: str = Field(default="cocounsel_documents")
     qdrant_vector_size: int = Field(default=384)
     qdrant_distance: Literal["Cosine", "Dot", "Euclid"] = Field(default="Cosine")

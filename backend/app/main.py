@@ -4,7 +4,7 @@ import base64
 import time
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from fastapi import (
     Depends,
@@ -156,17 +156,6 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
     """Ensure GraphQL HTTP responses include negotiated CORS headers."""
 
     origin = request.headers.get("origin")
-    if origin:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
-        vary_header = response.headers.get("Vary")
-        if vary_header:
-            vary_values = {value.strip() for value in vary_header.split(",") if value}
-            vary_values.add("Origin")
-            response.headers["Vary"] = ", ".join(sorted(vary_values))
-        else:
-            response.headers["Vary"] = "Origin"
-
     allow_headers = request.headers.get(
         "access-control-request-headers", "authorization,content-type"
     )
@@ -178,8 +167,30 @@ def _apply_graphql_cors_headers(request: Request, response: Response) -> None:
             allow_methods_list.insert(0, requested_method_upper)
     allow_methods = ", ".join(dict.fromkeys(allow_methods_list))
 
-    response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
-    response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
+    allowed_origins = tuple(settings.graphql_cors_allowed_origins)
+    allow_any_origin = "*" in allowed_origins
+    origin_is_allowed = bool(origin) and (
+        allow_any_origin or origin in allowed_origins
+    )
+
+    if origin_is_allowed:
+        allowed_origin = cast(str, origin)
+        response.headers["Access-Control-Allow-Origin"] = allowed_origin
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        vary_header = response.headers.get("Vary")
+        if vary_header:
+            vary_values = {value.strip() for value in vary_header.split(",") if value}
+            vary_values.add("Origin")
+            response.headers["Vary"] = ", ".join(sorted(vary_values))
+        else:
+            response.headers["Vary"] = "Origin"
+        response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
+        response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
+
+    if not origin and allow_any_origin:
+        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+        response.headers.setdefault("Access-Control-Allow-Headers", allow_headers)
+        response.headers.setdefault("Access-Control-Allow-Methods", allow_methods)
 
 
 @app.options("/graphql", include_in_schema=False)
@@ -195,29 +206,6 @@ async def graphql_http_options(request: Request) -> Response:
     response.headers["Allow"] = allow_methods
     _apply_graphql_cors_headers(request, response)
     return response
-    """Handle GraphQL CORS preflight with explicit allow headers."""
-
-    origin = request.headers.get("origin") or "*"
-    requested_headers = request.headers.get("access-control-request-headers")
-    allow_headers = requested_headers or "Authorization, Content-Type"
-
-    headers: dict[str, str] = {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "OPTIONS, GET, POST",
-        "Access-Control-Allow-Headers": allow_headers,
-        "Access-Control-Max-Age": "86400",
-    }
-
-    vary_headers: list[str] = ["Origin"]
-    if requested_headers:
-        vary_headers.append("Access-Control-Request-Headers")
-    headers["Vary"] = ", ".join(dict.fromkeys(vary_headers))
-
-    # Only advertise credential support when responding to a specific origin.
-    if origin != "*":
-        headers["Access-Control-Allow-Credentials"] = "true"
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)
 
 
 @app.api_route("/graphql", methods=["GET", "POST"])
